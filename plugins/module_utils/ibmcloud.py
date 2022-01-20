@@ -607,6 +607,14 @@ class Terraform:
         "/IBM-Cloud/terraform-provider-ibm/releases/download/")
     TERRAFORM_BASE_URL = "https://releases.hashicorp.com/terraform/"
     TF_PROVIDER_TEMPLATE = """\
+    terraform {{
+        required_providers {{
+            ibm = {{
+                source = "local/ibm-cloud/ibm"
+                version = ">= {ibm_provider_version}"
+            }}
+        }}
+    }}
     provider "ibm" {{
     {{% if generation is not none %}}
         generation       = "{{{{ generation }}}}"
@@ -644,7 +652,7 @@ class Terraform:
             self.function_namespace = parameters['function_namespace']
         self.terraform_dir = terraform_dir
         self.ibm_provider_version = ibm_provider_version
-        self.executable = os.path.join(terraform_dir, 'terraform')
+        self.executable = '/usr/local/bin/terraform'
         self.env = env
         self.platform = sys.platform
         if self.platform.startswith('linux'):
@@ -665,35 +673,9 @@ class Terraform:
         # Create provider file in object subdir
         self._render_provider_file()
 
-        # Copy Terraform executable
-        self._install_terraform()
-
-        # Copy IBM Cloud provider
-        self._install_ibmcloud_tf_provider()
-
         # Initialize Terraform
         self.init()
         self.refresh()
-
-    def _install_terraform(self):
-        filename = 'terraform'
-        filepath = os.path.join(self.terraform_dir, filename)
-        if os.path.isfile(filepath):
-            os.remove(filepath)
-        shutil.copy('/usr/local/bin/terraform', filepath)
-        os.chmod(filepath, 0o755)
-        self.executable = filepath
-
-    def _install_ibmcloud_tf_provider(self):
-        tf_plugins_path = os.path.join(self.terraform_dir, 'terraform.d', 'plugins')
-        if not os.path.exists(tf_plugins_path):
-            os.makedirs(tf_plugins_path)
-        filename = 'terraform-provider-ibm_v' + self.ibm_provider_version
-        filepath = os.path.join(tf_plugins_path, filename)
-        if os.path.isfile(filepath):
-            os.remove(filepath)
-        shutil.copy('/usr/local/bin/terraform-provider-ibm', filepath)
-        os.chmod(filepath, 0o755)
 
     def _render_provider_file(self):
         # Render terraform provider file
