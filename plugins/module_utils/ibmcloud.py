@@ -600,9 +600,6 @@ class Terraform:
         parameters (dict): Resource parameter dictionary
         terraform_dir (str): Terraform working directory
         ibm_provider_version (str): IBM Cloud Terraform provider version
-        terraform_version (str, optional): Terraform version. TODO: If
-                                           not specified version is set
-                                           via table lookup.
         env (dict, optional): Mapping of environment variables
     """
     IBM_PROVIDER_BASE_URL = (
@@ -610,8 +607,15 @@ class Terraform:
         "/IBM-Cloud/terraform-provider-ibm/releases/download/")
     TERRAFORM_BASE_URL = "https://releases.hashicorp.com/terraform/"
     TF_PROVIDER_TEMPLATE = """\
+    terraform {{
+        required_providers {{
+            ibm = {{
+                source = "IBM-Cloud/ibm"
+                version = "~> {ibm_provider_version}"
+            }}
+        }}
+    }}
     provider "ibm" {{
-        version          = ">= {ibm_provider_version}"
     {{% if generation is not none %}}
         generation       = "{{{{ generation }}}}"
     {{% endif %}}
@@ -632,7 +636,6 @@ class Terraform:
             parameters,
             terraform_dir,
             ibm_provider_version,
-            terraform_version='0.12.20',
             env=None):
 
         self.generation = None
@@ -649,7 +652,6 @@ class Terraform:
             self.function_namespace = parameters['function_namespace']
         self.terraform_dir = terraform_dir
         self.ibm_provider_version = ibm_provider_version
-        self.terraform_version = terraform_version
         self.executable = os.path.join(terraform_dir, 'terraform')
         self.env = env
         self.platform = sys.platform
@@ -671,66 +673,32 @@ class Terraform:
         # Create provider file in object subdir
         self._render_provider_file()
 
-        # Check for existing Terraform executable
-        if os.path.isfile(self.executable):
-            returncode, stdout, stderr = run_process(
-                '{} version'.format(self.executable))
-            try:
-                existing_version = re.findall(
-                    r"Terraform v(\d+\.\d+\.\d+)\n", stdout)[0]
-            except IndexError:
-                existing_version = None
+        # Copy Terraform executable
+        self._install_terraform()
 
-        # Download and install Terraform if desired version not found
-        if (not os.path.isfile(self.executable) or
-                existing_version != self.terraform_version):
-            self._install_terraform()
-
-        # Check for existing IBM Cloud provider
-        provider_found = False
-        for item in os.listdir(self.terraform_dir):
-            if item.startswith('terraform-provider-ibm_v'):
-                if item == 'terraform-provider-ibm_v' + ibm_provider_version:
-                    provider_found = True
-                else:
-                    os.remove(os.path.join(self.terraform_dir, item))
-
-        # Download and install IBM Cloud provider if desired version not
-        # found
-        if not provider_found:
-            self._install_ibmcloud_tf_provider()
+        # Copy IBM Cloud provider
+        self._install_ibmcloud_tf_provider()
 
         # Initialize Terraform
         self.init()
         self.refresh()
-
-    def _download_extract_zip(self, url):
-        from ansible.module_utils.urls import open_url
-        from ansible.module_utils.six import BytesIO
-        from zipfile import ZipFile
-        if not os.path.isdir(self.directory):
-            os.makedirs(self.directory)
-        resp = open_url(url)
-        zip_archive = ZipFile(BytesIO(resp.read()))
-        zip_archive.extractall(path=self.terraform_dir)
 
     def _install_terraform(self):
         filename = 'terraform'
         filepath = os.path.join(self.terraform_dir, filename)
         if os.path.isfile(filepath):
             os.remove(filepath)
-        self._download_extract_zip(
-            "{0}{1}/terraform_{1}_{2}_amd64.zip".format(
-                self.TERRAFORM_BASE_URL, self.terraform_version, self.platform))
+        shutil.copy('/usr/local/bin/terraform', filepath)
         os.chmod(filepath, 0o755)
         self.executable = filepath
 
     def _install_ibmcloud_tf_provider(self):
         filename = 'terraform-provider-ibm_v' + self.ibm_provider_version
-        self._download_extract_zip(
-            "{0}v{1}/terraform-provider-ibm_{1}_{2}_amd64.zip".format(
-                self.IBM_PROVIDER_BASE_URL, self.ibm_provider_version, self.platform))
-        os.chmod(os.path.join(self.terraform_dir, filename), 0o755)
+        filepath = os.path.join(self.terraform_dir, filename)
+        if os.path.isfile(filepath):
+            os.remove(filepath)
+        shutil.copy('/usr/local/bin/terraform-provider-ibm', filepath)
+        os.chmod(filepath, 0o755)
 
     def _render_provider_file(self):
         # Render terraform provider file

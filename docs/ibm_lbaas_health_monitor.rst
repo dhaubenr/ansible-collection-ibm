@@ -23,7 +23,7 @@ Requirements
 ------------
 The below requirements are needed on the host that executes this module.
 
-- IBM-Cloud terraform-provider-ibm v1.37.1
+- IBM-Cloud terraform-provider-ibm v1.38.0
 - Terraform v0.12.20
 
 
@@ -102,4 +102,3 @@ Authors
 ~~~~~~~
 
 - Jay Carman (@jaywcarman)
-
