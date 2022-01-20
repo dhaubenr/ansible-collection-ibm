@@ -607,14 +607,6 @@ class Terraform:
         "/IBM-Cloud/terraform-provider-ibm/releases/download/")
     TERRAFORM_BASE_URL = "https://releases.hashicorp.com/terraform/"
     TF_PROVIDER_TEMPLATE = """\
-    terraform {{
-        required_providers {{
-            ibm = {{
-                source = "IBM-Cloud/ibm"
-                version = "~> {ibm_provider_version}"
-            }}
-        }}
-    }}
     provider "ibm" {{
     {{% if generation is not none %}}
         generation       = "{{{{ generation }}}}"
@@ -693,8 +685,11 @@ class Terraform:
         self.executable = filepath
 
     def _install_ibmcloud_tf_provider(self):
+        tf_plugins_path = os.path.join(self.terraform_dir, 'terraform.d', 'plugins')
+        if not os.path.exists(tf_plugins_path):
+            os.makedirs(tf_plugins_path)
         filename = 'terraform-provider-ibm_v' + self.ibm_provider_version
-        filepath = os.path.join(self.terraform_dir, filename)
+        filepath = os.path.join(tf_plugins_path, filename)
         if os.path.isfile(filepath):
             os.remove(filepath)
         shutil.copy('/usr/local/bin/terraform-provider-ibm', filepath)
